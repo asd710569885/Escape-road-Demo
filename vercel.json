@@ -13,6 +13,17 @@
   ],
   "routes": [
     {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/Escape-road/dist/assets/$1"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "/Escape-road/dist/favicon.ico"
+    },
+    {
       "src": "/(.*)",
       "dest": "/Escape-road/dist/index.html"
     }
