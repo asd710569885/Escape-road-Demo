@@ -42,7 +42,7 @@ export default defineConfig({
     port: 4173
   },
   build: {
-    outDir: 'dist', // 恢复 Vite 默认相对路径
+    outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
     rollupOptions: {
