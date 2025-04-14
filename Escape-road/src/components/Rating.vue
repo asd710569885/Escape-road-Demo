@@ -71,9 +71,6 @@ const API_BASE_URL = import.meta.env.PROD
 
 const API_URL = `${API_BASE_URL}/api/ratings`;
 
-// 配置 axios 默认值
-axios.defaults.withCredentials = true;
-
 const averageRating = ref(0); // 初始值设为 0 而不是 null
 const ratingCount = ref(0);
 const hoverRating = ref(0); // 用户鼠标悬停的星级

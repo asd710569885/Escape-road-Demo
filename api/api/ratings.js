@@ -9,14 +9,14 @@ const redis = new Redis({
 // 处理评分提交
 export default async function handler(req, res) {
   // 设置 CORS 头
-  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-
-  // 处理 OPTIONS 请求
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // 处理预检请求
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
 
   // GET 请求处理获取评分
@@ -44,6 +44,10 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const { pageId, rating } = req.body;
+      
+      // 添加请求体解析日志
+      console.log('Received POST request body:', req.body);
+      
       if (!pageId || !rating || rating < 1 || rating > 5) {
         return res.status(400).json({ message: 'Invalid rating data' });
       }
@@ -67,5 +71,7 @@ export default async function handler(req, res) {
   }
 
   // 如果不是支持的方法，返回 405
-  return res.status(405).json({ message: 'Method not allowed' });
+  return res.status(405).json({ 
+    message: `Method ${req.method} not allowed. Supported methods are GET, POST, OPTIONS.` 
+  });
 } 
