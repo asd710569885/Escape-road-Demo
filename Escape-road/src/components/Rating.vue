@@ -66,10 +66,10 @@ const props = defineProps({
 
 // API 配置
 const API_BASE_URL = import.meta.env.PROD 
-  ? 'https://escape-road-demo-01.vercel.app/api'  // 生产环境 API URL
-  : 'http://localhost:3000/api';  // 开发环境 API URL
+  ? 'https://escape-road-demo-01.vercel.app'  // 生产环境 API URL
+  : 'http://localhost:3000';  // 开发环境 API URL
 
-const API_URL = `${API_BASE_URL}/ratings`;
+const API_URL = `${API_BASE_URL}/api/ratings`;
 
 // 配置 axios 默认值
 axios.defaults.withCredentials = true;
