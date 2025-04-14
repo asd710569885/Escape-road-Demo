@@ -76,8 +76,8 @@ app.use(cors({
   origin: [
     'http://localhost:5174',
     'http://localhost:3000',
-    'https://escape-road-demo-01.vercel.app',  // 添加你的 Vercel 域名
-    /\.vercel\.app$/  // 允许所有 vercel.app 子域名
+    'https://escape-road-demo-01.vercel.app',
+    /\.vercel\.app$/
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -171,35 +171,47 @@ app.post('/api/comments', commentLimiter, async (req, res) => {
 
 // 获取评分
 app.get('/api/ratings', getLimiter, async (req, res) => {
-  const pageId = req.query.pageId;
-  if (!pageId) {
-    return res.status(400).json({ message: 'PageId is required' });
-  }
-
   try {
-    const ratings = await kvClient.hgetall(`ratings:${pageId}`);
-    const stats = calculateRatingStats(ratings);
-    res.json(stats);
+    const { pageId } = req.query;
+    if (!pageId) {
+      return res.status(400).json({ message: 'Page ID is required' });
+    }
+
+    const key = `ratings:${pageId}`;
+    const ratingData = await redis.get(key) || { total: 0, count: 0 };
+    
+    res.json({
+      average: ratingData.count > 0 ? ratingData.total / ratingData.count : 0,
+      count: ratingData.count
+    });
   } catch (error) {
-    console.error('Error fetching ratings:', error);
-    res.status(500).json({ message: 'Failed to fetch ratings' });
+    console.error('Get rating error:', error);
+    res.status(500).json({ message: 'Failed to get rating' });
   }
 });
 
 // 提交评分
 app.post('/api/ratings', ratingLimiter, async (req, res) => {
-  const { pageId, rating } = req.body;
-  if (!pageId || !rating || rating < 1 || rating > 5) {
-    return res.status(400).json({ message: 'Valid pageId and rating (1-5) are required' });
-  }
-
   try {
-    await kvClient.hincrby(`ratings:${pageId}`, rating.toString(), 1);
-    const ratings = await kvClient.hgetall(`ratings:${pageId}`);
-    const stats = calculateRatingStats(ratings);
-    res.json(stats);
+    const { pageId, rating } = req.body;
+    if (!pageId || !rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: 'Invalid rating data' });
+    }
+
+    const key = `ratings:${pageId}`;
+    const ratingData = await redis.get(key) || { total: 0, count: 0 };
+    
+    ratingData.total = (ratingData.total || 0) + rating;
+    ratingData.count = (ratingData.count || 0) + 1;
+    
+    await redis.set(key, ratingData);
+    
+    res.json({
+      average: ratingData.total / ratingData.count,
+      count: ratingData.count
+    });
   } catch (error) {
-    console.error('Error submitting rating:', error);
+    console.error('Rating error:', error);
     res.status(500).json({ message: 'Failed to submit rating' });
   }
 });
