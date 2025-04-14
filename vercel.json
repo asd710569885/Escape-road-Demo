@@ -1,31 +1,11 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "Escape-road/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "buildCommand": "cd Escape-road && npm install && npm run build",
-        "outputDirectory": "Escape-road/dist",
-        "distDir": "Escape-road/dist"
-      }
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
-  "routes": [
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/assets/(.*)",
-      "dest": "/Escape-road/dist/assets/$1"
-    },
-    {
-      "src": "/favicon.ico",
-      "dest": "/Escape-road/dist/favicon.ico"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/Escape-road/dist/index.html"
-    }
-  ]
+  "buildCommand": "cd Escape-road && npm install && npm run build",
+  "outputDirectory": "Escape-road/dist",
+  "framework": "vite"
 }

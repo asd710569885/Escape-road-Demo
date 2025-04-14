@@ -11,7 +11,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 // https://vite.dev/config/
 // 改回同步函数
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [
     vue(),
     vueJsx(),
