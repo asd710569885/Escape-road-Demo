@@ -22,8 +22,15 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/Escape-road/dist/assets/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/Escape-road/dist/$1"
+      "dest": "/Escape-road/dist/index.html"
     }
   ]
 } 
