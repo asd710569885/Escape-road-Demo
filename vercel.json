@@ -1,8 +1,14 @@
 {
   "version": 2,
-  "buildCommand": "cd Escape-road && npm install && npm run build",
-  "outputDirectory": "Escape-road/dist",
   "builds": [
+    { 
+      "src": "Escape-road/package.json", 
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "Escape-road/dist",
+        "buildCommand": "cd Escape-road && npm install && npm run build"
+      }
+    },
     { 
       "src": "api/index.js", 
       "use": "@vercel/node" 
@@ -32,6 +38,7 @@
   ],
   "env": {
     "KV_URL": "@kv_url",
-    "KV_REST_API_TOKEN": "@kv_rest_api_token"
+    "KV_REST_API_TOKEN": "@kv_rest_api_token",
+    "NODE_ENV": "production"
   }
 }
