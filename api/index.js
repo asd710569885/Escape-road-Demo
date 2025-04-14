@@ -71,6 +71,12 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// 添加请求日志中间件
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // CORS 配置
 app.use(cors({
   origin: [
@@ -251,4 +257,13 @@ app.use((err, req, res, next) => {
 // 404 处理
 app.use((req, res) => {
   res.status(404).json({ message: 'Not Found' });
+});
+
+// 添加一个测试端点
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
 });
