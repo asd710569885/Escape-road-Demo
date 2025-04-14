@@ -5,7 +5,7 @@
       "destination": "/index.html"
     }
   ],
-  "buildCommand": "cd Escape-road && npm install --production=false && npm run vercel-build",
+  "buildCommand": "cd Escape-road && npm install && vite build",
   "outputDirectory": "Escape-road/dist",
   "framework": "vite"
 }
