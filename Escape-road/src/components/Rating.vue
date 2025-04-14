@@ -1,37 +1,55 @@
 <template>
-  <div class="rating-section">
-    <div class="current-rating">
-      <span class="average-score">{{ averageRating !== null ? averageRating.toFixed(1) : '-' }}</span>
-      <span class="stars" :style="{ '--rating': averageRating || 0 }">
-        <span v-for="n in 5" :key="'filled-' + n" class="star filled">★</span>
-        <span v-for="n in 5" :key="'empty-' + n" class="star empty">☆</span>
-      </span>
-      <span class="rating-count">({{ ratingCount }} {{ ratingCount === 1 ? 'rating' : 'ratings' }})</span>
+  <div class="rating-container">
+    <div class="rating-row">
+      <!-- 平均分和星星显示 -->
+      <div class="rating-display" v-if="!isLoading">
+        <span class="average-score">{{ averageRating.toFixed(1) }}</span>
+        <div class="stars-display">
+          <i v-for="star in 5" 
+             :key="'display-' + star" 
+             class="fas fa-star"
+             :class="{ 
+               'full': star <= Math.floor(averageRating),
+               'half': star === Math.ceil(averageRating) && averageRating % 1 >= 0.5
+             }"
+          ></i>
+        </div>
+        <span class="count">({{ ratingCount }} ratings)</span>
+      </div>
     </div>
-    <div class="user-rating" v-if="!hasRated">
+
+    <!-- 用户评分部分 -->
+    <div class="rating-row" v-if="!hasRated">
       <span class="rate-label">Rate this game:</span>
-      <span class="interactive-stars">
-        <span
-          v-for="n in 5"
-          :key="'rate-' + n"
-          class="star interactive"
-          :class="{ 'hover': n <= hoverRating, 'selected': n <= currentSelection }"
-          @mouseover="hoverRating = n"
+      <div class="stars-input">
+        <span 
+          v-for="star in 5" 
+          :key="star" 
+          class="star" 
+          @click="submitRating(star)"
+          @mouseover="hoverRating = star"
           @mouseleave="hoverRating = 0"
-          @click="submitRating(n)"
         >
-          {{ n <= (hoverRating || currentSelection) ? '★' : '☆' }}
+          <i :class="[
+            'fas fa-star',
+            { 
+              'selected': (hoverRating || currentSelection) >= star,
+              'disabled': isSubmitting || hasRated
+            }
+          ]"></i>
         </span>
-      </span>
-      <span v-if="isSubmitting" class="submitting-msg">Submitting...</span>
-      <span v-if="submitError" class="error-msg">{{ submitError }}</span>
+      </div>
     </div>
-     <div v-else class="rated-message">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="check-icon">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-      </svg>
-      Thanks for rating!
+
+    <div v-if="isLoading" class="loading">
+      <span>Loading...</span>
     </div>
+
+    <transition name="fade">
+      <div v-if="submitMessage" :class="['message', submitMessage.type]">
+        {{ submitMessage.text }}
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -46,31 +64,40 @@ const props = defineProps({
   }
 });
 
-// !!! 与 Comments.vue 一致，生产环境需修改 !!!
-const API_URL = '/api/ratings';
+// API 配置
+const API_BASE_URL = import.meta.env.PROD 
+  ? 'https://escape-road-demo-01.vercel.app/api'  // 生产环境 API URL
+  : 'http://localhost:3000/api';  // 开发环境 API URL
 
-const averageRating = ref(null);
+const API_URL = `${API_BASE_URL}/ratings`;
+
+// 配置 axios 默认值
+axios.defaults.withCredentials = true;
+
+const averageRating = ref(0); // 初始值设为 0 而不是 null
 const ratingCount = ref(0);
 const hoverRating = ref(0); // 用户鼠标悬停的星级
 const currentSelection = ref(0); // 用户当前选择或已提交的星级
 const hasRated = ref(false); // 用户是否已评分 (简单本地状态)
 const isSubmitting = ref(false);
-const submitError = ref(null);
-const isLoading = ref(false); // 用于初始加载
+const submitMessage = ref(null);
+const isLoading = ref(true); // 用于初始加载
 
 // 获取当前评分信息
 const fetchRating = async () => {
   if (!props.pageId) return;
   isLoading.value = true;
   try {
-    const response = await axios.get(API_URL, { params: { pageId: props.pageId } });
-    averageRating.value = response.data.average;
-    ratingCount.value = response.data.count;
-    // 可以在这里从 localStorage 读取用户是否已评分，以持久化 hasRated 状态
-    // hasRated.value = localStorage.getItem(`rated_${props.pageId}`) === 'true';
+    const response = await axios.get(`${API_URL}`, { 
+      params: { pageId: props.pageId }
+    });
+    console.log('Rating response:', response.data);
+    averageRating.value = response.data.average || 0;
+    ratingCount.value = response.data.count || 0;
   } catch (error) {
     console.error('Error fetching rating:', error);
-    // 不显示获取错误，以免干扰用户
+    averageRating.value = 0;
+    ratingCount.value = 0;
   } finally {
     isLoading.value = false;
   }
@@ -81,7 +108,7 @@ const submitRating = async (ratingValue) => {
   if (isSubmitting.value || hasRated.value) return;
 
   isSubmitting.value = true;
-  submitError.value = null;
+  submitMessage.value = null;
   currentSelection.value = ratingValue;
 
   try {
@@ -89,23 +116,36 @@ const submitRating = async (ratingValue) => {
       pageId: props.pageId,
       rating: ratingValue
     });
-    averageRating.value = response.data.average;
-    ratingCount.value = response.data.count;
+    console.log('Submit rating response:', response.data);
+    averageRating.value = response.data.average || 0;
+    ratingCount.value = response.data.count || 0;
     hasRated.value = true;
-    // localStorage.setItem(`rated_${props.pageId}`, 'true');
-
+    submitMessage.value = {
+      type: 'success',
+      text: 'Thank you for your rating!'
+    };
   } catch (error) {
-    console.error('Error submitting rating:', error);
-    // 修改：检查是否为速率限制错误 (429)
-    if (error.response && error.response.status === 429) {
-      submitError.value = error.response.data.message || 'Request limit reached. Please try again later.';
+    console.log('Rating submission error:', error);
+    currentSelection.value = 0;
+    if (error.response?.status === 429) {
+      submitMessage.value = {
+        type: 'info',
+        text: error.response.data.message
+      };
     } else {
-      submitError.value = error.response?.data?.message || 'Failed to submit rating.';
+      submitMessage.value = {
+        type: 'info',
+        text: 'Unable to submit rating. Please try again later.'
+      };
     }
-    currentSelection.value = 0; // 提交失败，清除选择状态
-    setTimeout(() => { submitError.value = null; }, 3000);
   } finally {
     isSubmitting.value = false;
+    // 3秒后清除消息
+    if (submitMessage.value) {
+      setTimeout(() => {
+        submitMessage.value = null;
+      }, 3000);
+    }
   }
 };
 
@@ -116,12 +156,12 @@ onMounted(fetchRating);
 watch(() => props.pageId, (newPageId, oldPageId) => {
   if (newPageId && newPageId !== oldPageId) {
     // 重置状态
-    averageRating.value = null;
+    averageRating.value = 0;
     ratingCount.value = 0;
     hoverRating.value = 0;
     currentSelection.value = 0;
     hasRated.value = false; // 重置评分状态
-    submitError.value = null;
+    submitMessage.value = null;
     fetchRating(); // 获取新页面的评分
   }
 }, { immediate: false });
@@ -129,169 +169,124 @@ watch(() => props.pageId, (newPageId, oldPageId) => {
 </script>
 
 <style scoped>
-.rating-section {
+.rating-container {
   display: flex;
   flex-direction: column;
-  align-items: left;
-  padding: 8px 0 12px; /* 减少垂直内边距 */
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  /* border-bottom: 1px solid #f0f0f0; */ /* 边框由父组件控制 */
-  /* margin-bottom: 20px; */ /* 外边距由父组件控制 */
+  gap: 0.5rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.current-rating {
+.rating-row {
   display: flex;
-  align-items: baseline;
-  gap: 5px; /* 减少平均分区域内部间距 */
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rating-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .average-score {
-  font-size: 1.5rem; /* 可以稍微减小一点 */
-  font-weight: 700;
-  color: #2c3e50;
-  line-height: 1;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
 }
 
-.stars {
-  position: relative;
-  display: inline-block;
-  font-size: 1.6rem; /* 可以稍微减小一点 */
-  line-height: 1;
-  margin: 0 1px;
-}
-
-/* 使用 CSS 变量和 clip-path 显示平均分星星 */
-.stars::before {
-  content: '★★★★★';
-  position: absolute;
-  top: 0;
-  left: 0;
-  color: #ffc107; /* 稍亮的黄色 */
-  clip-path: inset(0 calc((5 - var(--rating, 0)) * 20%) 0 0); /* 根据评分裁剪 */
-  z-index: 1;
-}
-
-.stars .star.empty {
-  color: #dcdcdc; /* 更浅的灰色 */
-}
-
-/* 隐藏实际的填充和空星星字符，只用伪元素显示 */
-.stars .star {
-   visibility: hidden;
-}
-
-.rating-count {
-  font-size: 0.8rem; /* 可以再小一点 */
-  color: #888;
-  padding-left: 1px;
-}
-
-.user-rating {
+.stars-display {
   display: flex;
-  align-items: center;
-  gap: 6px; /* 减少用户评分区域内部间距 */
-  color: #555;
-  font-size: 0.85rem; /* 调整字体大小 */
-  min-height: 24px; /* 调整最小高度 */
+  gap: 0.15rem;
+}
+
+.stars-display i {
+  font-size: 1.1rem;
+  color: #ddd;
+}
+
+.stars-display i.full {
+  color: #ffd700;
+}
+
+.stars-display i.half {
+  background: linear-gradient(90deg, #ffd700 50%, #ddd 50%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .rate-label {
-    font-weight: 500;
-    margin-right: 2px;
+  color: #666;
+  font-size: 0.9rem;
 }
 
-.interactive-stars {
-    display: flex;
+.stars-input {
+  display: flex;
+  gap: 0.15rem;
 }
 
-.user-rating .star.interactive {
-  font-size: 1.5rem; /* 减小交互星星 */
+.star {
   cursor: pointer;
-  color: #cccccc; /* 默认更浅的灰色 */
-  transition: color 0.15s ease-in-out, transform 0.1s ease-in-out;
-  padding: 0; /* 移除星星之间的 padding */
+  font-size: 1.1rem;
+  transition: transform 0.1s ease;
 }
 
-.user-rating .star.interactive:hover,
-.user-rating .star.interactive.hover,
-.user-rating .star.interactive.selected {
-  color: #ffc107; /* 悬停或选中时黄色 */
+.star:hover {
+  transform: scale(1.1);
 }
 
-.user-rating .star.interactive:active {
-    transform: scale(0.92);
+.star i {
+  color: #ddd;
+  transition: color 0.2s ease;
 }
 
-.rated-message {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: #2ecc71; /* 更柔和的绿色 */
-    font-size: 0.9rem; /* 调整感谢信息大小 */
-    font-weight: 500;
-    margin-top: 2px; /* 调整位置 */
+.star i.selected {
+  color: #ffd700;
 }
 
-.rated-message .check-icon {
-    width: 1em;
-    height: 1em;
+.star.disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
 }
 
-.submitting-msg,
-.error-msg {
-    font-size: 0.8rem;
-    margin-left: 8px;
-    font-style: italic;
+.count {
+  color: #666;
+  font-size: 0.9rem;
 }
 
-.submitting-msg {
-    color: #888;
+.loading {
+  color: #666;
+  font-style: italic;
+  font-size: 0.9rem;
 }
 
-.error-msg {
-    color: #e74c3c; /* 错误红色 */
+.message {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  text-align: center;
+  max-width: 300px;
 }
 
-/* 响应式调整 */
-@media (max-width: 600px) {
-    .rating-section {
-        padding: 6px 0 10px;
-        margin-bottom: 10px;
-    }
-    .current-rating {
-        gap: 3px 6px;
-        margin-bottom: 6px;
-    }
-    .average-score {
-        font-size: 1.3rem;
-    }
-    .stars {
-        font-size: 1.4rem;
-    }
-    .rating-count {
-        font-size: 0.75rem;
-    }
-    .user-rating {
-        /* 保持堆叠 */
-        gap: 4px;
-        font-size: 0.8rem;
-        min-height: auto;
-        margin-top: 3px;
-    }
-     .user-rating .star.interactive {
-        font-size: 1.3rem;
-     }
-     .rate-label {
-         margin-bottom: 0;
-     }
-     .submitting-msg,
-     .error-msg {
-         margin-top: 2px;
-     }
-    .rated-message {
-        font-size: 0.85rem;
-        margin-top: 0;
-    }
+.message.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
 }
 
+.message.info {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border: 1px solid #90caf9;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 </style>
