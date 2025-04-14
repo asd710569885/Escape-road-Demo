@@ -66,7 +66,7 @@ const props = defineProps({
 
 // API 配置
 const API_BASE_URL = import.meta.env.PROD 
-  ? 'https://escape-road-demo-01.vercel.app'  // 生产环境 API URL
+  ? ''  // 生产环境使用相对路径
   : 'http://localhost:3000';  // 开发环境 API URL
 
 const API_URL = `${API_BASE_URL}/api/ratings`;

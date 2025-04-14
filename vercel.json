@@ -2,28 +2,18 @@
   "version": 2,
   "builds": [
     { 
-      "src": "Escape-road/package.json", 
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "Escape-road/dist",
-        "buildCommand": "cd Escape-road && npm install && npm run build"
-      }
-    },
-    { 
       "src": "api/index.js", 
       "use": "@vercel/node" 
     },
     { 
-      "src": "api/api/*.js", 
-      "use": "@vercel/node" 
+      "src": "Escape-road/package.json", 
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "Escape-road/dist"
+      }
     }
   ],
   "routes": [
-    {
-      "src": "/api/ratings(.*)",
-      "methods": ["OPTIONS", "GET", "POST"],
-      "dest": "/api/api/ratings.js"
-    },
     {
       "src": "/api/(.*)",
       "dest": "/api/index.js"

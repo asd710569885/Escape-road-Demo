@@ -238,3 +238,17 @@ export default app;
 app.listen(PORT, () => {
   console.log(`[API] Server running on port ${PORT}`);
 });
+
+// 错误处理中间件
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    message: 'Internal Server Error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// 404 处理
+app.use((req, res) => {
+  res.status(404).json({ message: 'Not Found' });
+});
