@@ -3,7 +3,6 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
-import vueDevTools from 'vite-plugin-vue-devtools'
 // import Sitemap from 'vite-plugin-sitemap' // 暂时注释掉
 
 // 不再需要 __dirname
@@ -15,7 +14,6 @@ export default defineConfig({
   plugins: [
     vue(),
     vueJsx(),
-    vueDevTools(),
     // Sitemap({
     //   hostname: 'https://escape-road-online.com',
     //   exclude: ['/admin/login', '/admin/dashboard'],
