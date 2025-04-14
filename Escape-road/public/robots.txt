@@ -1,0 +1,14 @@
+# 允许所有行为良好的爬虫访问
+User-agent: *
+
+# 禁止爬虫访问管理后台区域
+Disallow: /admin/
+
+# 禁止爬虫访问 API 接口
+Disallow: /api/
+
+# 允许访问网站根目录及其他未禁止的页面
+Allow: /
+
+# 指定站点地图文件位置
+Sitemap: https://escape-road-online.com/sitemap.xml 
