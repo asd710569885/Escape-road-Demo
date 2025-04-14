@@ -2,67 +2,19 @@ import 'dotenv/config';
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { Redis } from '@upstash/redis';
-import { 
-  adminLogin, 
-  verifyAdminToken, 
-  changeAdminPassword, 
-  getAllComments, 
-  deleteCommentById 
-} from './admin.js'
+import {
+  adminLogin,
+  verifyAdminToken,
+  changeAdminPassword,
+  getAllComments,
+  deleteCommentById
+} from './admin.js';
 
-// 创建 Upstash Redis 客户端
-const redis = new Redis({
-  url: process.env.KV_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
-
-// 测试数据库连接
-redis.ping().then(() => {
-  console.log("[API] Successfully connected to Upstash Redis");
-}).catch((error) => {
-  console.error("[API] Failed to connect to Upstash Redis:", error);
-});
-
-// 数据库操作封装
-const kvClient = {
-  async lrange(key, start, end) {
-    try {
-      const result = await redis.lrange(key, start, end);
-      return result || [];
-    } catch (error) {
-      console.error('[KV] Error in lrange:', error);
-      return [];
-    }
-  },
-  async lpush(key, value) {
-    try {
-      return await redis.lpush(key, value);
-    } catch (error) {
-      console.error('[KV] Error in lpush:', error);
-      throw new Error('Failed to save comment');
-    }
-  },
-  async hgetall(key) {
-    try {
-      const result = await redis.hgetall(key);
-      return result || { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
-    } catch (error) {
-      console.error('[KV] Error in hgetall:', error);
-      return { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
-    }
-  },
-  async hincrby(key, field, increment) {
-    try {
-      return await redis.hincrby(key, field, increment);
-    } catch (error) {
-      console.error('[KV] Error in hincrby:', error);
-      throw new Error('Failed to update rating');
-    }
-  }
-};
-
-console.log("[API] Connected to Upstash KV");
+// 导入共享模块
+import redis, { kvClient } from './lib/redis.js';
+import logger from './lib/logger.js';
+import { ErrorTypes, errorMiddleware, asyncHandler } from './lib/error-handler.js';
+import { validateRequired, validateRating, validateComment, validateUsername } from './lib/validation.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,10 +24,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 添加请求日志中间件
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
+app.use(logger.requestLogger);
 
 // CORS 配置
 app.use(cors({
@@ -104,8 +53,8 @@ const createLimiter = (message, max = 1) => rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute window
   max: max,
   keyGenerator: keyGenerator,
-  handler: (req, res) => {
-    res.status(429).json({ 
+  handler: (_, res) => {
+    res.status(429).json({
       message,
       retryAfter: Math.ceil(60 - (Date.now() % 60000) / 1000) // 返回需要等待的秒数
     });
@@ -118,7 +67,8 @@ const commentLimiter = createLimiter('You can only post one comment per game eve
 const ratingLimiter = createLimiter('You can only submit one rating per game every minute.'); // 改回每分钟1次
 const getLimiter = createLimiter('Too many requests, please try again later.', 30);
 
-// 评分统计计算
+// 评分统计计算 - 保留供将来使用
+/*
 const calculateRatingStats = (ratingCounts) => {
   let totalScore = 0;
   let count = 0;
@@ -135,92 +85,84 @@ const calculateRatingStats = (ratingCounts) => {
   const average = count > 0 ? totalScore / count : 0;
   return { average: parseFloat(average.toFixed(1)), count };
 };
+*/
 
 // API 路由
 // 获取评论
-app.get('/api/comments', getLimiter, async (req, res) => {
-  const pageId = req.query.pageId;
+app.get('/api/comments', getLimiter, asyncHandler(async (req, res) => {
+  const { pageId } = req.query;
+
+  // 验证输入
   if (!pageId) {
-    return res.status(400).json({ message: 'PageId is required' });
+    throw ErrorTypes.BAD_REQUEST('PageId is required');
   }
 
-  try {
-    const comments = await kvClient.lrange(`comments:${pageId}`, 0, -1);
-    res.json(comments);
-  } catch (error) {
-    console.error('Error fetching comments:', error);
-    res.status(500).json({ message: 'Failed to fetch comments' });
-  }
-});
+  const comments = await kvClient.lrange(`comments:${pageId}`, 0, -1);
+  res.json(comments);
+}));
 
 // 添加评论
-app.post('/api/comments', commentLimiter, async (req, res) => {
+app.post('/api/comments', commentLimiter, asyncHandler(async (req, res) => {
   const { pageId, text, username } = req.body;
-  if (!pageId || !text) {
-    return res.status(400).json({ message: 'PageId and text are required' });
-  }
 
-  try {
-    const comment = {
-      id: Date.now().toString(),
-      text,
-      username: username || 'Anonymous',
-      timestamp: new Date().toISOString()
-    };
-    await kvClient.lpush(`comments:${pageId}`, JSON.stringify(comment));
-    res.json(comment);
-  } catch (error) {
-    console.error('Error adding comment:', error);
-    res.status(500).json({ message: 'Failed to add comment' });
-  }
-});
+  // 验证输入
+  validateRequired(req.body, ['pageId', 'text'], 'PageId and text are required');
+  validateComment(text);
+  if (username) validateUsername(username);
+
+  const comment = {
+    id: Date.now().toString(),
+    text,
+    username: username || 'Anonymous',
+    timestamp: new Date().toISOString()
+  };
+
+  await kvClient.lpush(`comments:${pageId}`, JSON.stringify(comment));
+  logger.info('新评论已添加', { pageId, commentId: comment.id });
+  res.status(201).json(comment);
+}));
 
 // 获取评分
-app.get('/api/ratings', getLimiter, async (req, res) => {
-  try {
-    const { pageId } = req.query;
-    if (!pageId) {
-      return res.status(400).json({ message: 'Page ID is required' });
-    }
+app.get('/api/ratings', getLimiter, asyncHandler(async (req, res) => {
+  const { pageId } = req.query;
 
-    const key = `ratings:${pageId}`;
-    const ratingData = await redis.get(key) || { total: 0, count: 0 };
-    
-    res.json({
-      average: ratingData.count > 0 ? ratingData.total / ratingData.count : 0,
-      count: ratingData.count
-    });
-  } catch (error) {
-    console.error('Get rating error:', error);
-    res.status(500).json({ message: 'Failed to get rating' });
+  // 验证输入
+  if (!pageId) {
+    throw ErrorTypes.BAD_REQUEST('Page ID is required');
   }
-});
+
+  const key = `ratings:${pageId}`;
+  const ratingData = await kvClient.get(key) || { total: 0, count: 0 };
+
+  res.json({
+    average: ratingData.count > 0 ? ratingData.total / ratingData.count : 0,
+    count: ratingData.count
+  });
+}));
 
 // 提交评分
-app.post('/api/ratings', ratingLimiter, async (req, res) => {
-  try {
-    const { pageId, rating } = req.body;
-    if (!pageId || !rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ message: 'Invalid rating data' });
-    }
+app.post('/api/ratings', ratingLimiter, asyncHandler(async (req, res) => {
+  const { pageId, rating } = req.body;
 
-    const key = `ratings:${pageId}`;
-    const ratingData = await redis.get(key) || { total: 0, count: 0 };
-    
-    ratingData.total = (ratingData.total || 0) + rating;
-    ratingData.count = (ratingData.count || 0) + 1;
-    
-    await redis.set(key, ratingData);
-    
-    res.json({
-      average: ratingData.total / ratingData.count,
-      count: ratingData.count
-    });
-  } catch (error) {
-    console.error('Rating error:', error);
-    res.status(500).json({ message: 'Failed to submit rating' });
-  }
-});
+  // 验证输入
+  validateRequired(req.body, ['pageId', 'rating'], 'PageId and rating are required');
+  validateRating(rating);
+
+  const key = `ratings:${pageId}`;
+  const ratingData = await kvClient.get(key) || { total: 0, count: 0 };
+
+  ratingData.total = (ratingData.total || 0) + Number(rating);
+  ratingData.count = (ratingData.count || 0) + 1;
+
+  await kvClient.set(key, ratingData);
+
+  logger.info('新评分已提交', { pageId, rating, newAverage: ratingData.total / ratingData.count });
+
+  res.json({
+    average: ratingData.total / ratingData.count,
+    count: ratingData.count
+  });
+}));
 
 // 管理员登录路由
 app.post('/api/admin/login', adminLogin);
@@ -231,9 +173,9 @@ app.get('/api/admin/comments', verifyAdminToken, getAllComments);
 app.delete('/api/admin/comments/:pageId/:commentId', verifyAdminToken, deleteCommentById);
 
 // 受保护的管理员路由
-app.get('/api/admin/protected', verifyAdminToken, (req, res) => {
+app.get('/api/admin/protected', verifyAdminToken, asyncHandler(async (_, res) => {
   res.json({ message: '已通过验证的管理员路由' });
-});
+}));
 
 // --- Removed Debug API Endpoint ---
 // app.get('/api/debug/view-data', ...) // Removed
@@ -245,25 +187,24 @@ app.listen(PORT, () => {
   console.log(`[API] Server running on port ${PORT}`);
 });
 
-// 错误处理中间件
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    message: 'Internal Server Error',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
+// 使用统一的错误处理中间件
+app.use(errorMiddleware);
 
 // 404 处理
-app.use((req, res) => {
+app.use((_, res) => {
   res.status(404).json({ message: 'Not Found' });
 });
 
 // 添加一个测试端点
-app.get('/api/health', (req, res) => {
+app.get('/api/health', asyncHandler(async (_, res) => {
+  // 测试 Redis 连接
+  const redisStatus = await redis.ping().then(() => 'ok').catch(() => 'error');
+
   res.json({
     status: 'ok',
+    redis: redisStatus,
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    version: process.env.npm_package_version || '1.0.0'
   });
-});
+}));
