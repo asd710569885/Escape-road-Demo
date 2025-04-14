@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "buildCommand": "cd Escape-road && npm install && npm run build",
+  "outputDirectory": "Escape-road/dist",
+  "builds": [
+    { 
+      "src": "api/index.js", 
+      "use": "@vercel/node" 
+    },
+    { 
+      "src": "api/api/*.js", 
+      "use": "@vercel/node" 
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/ratings(.*)",
+      "methods": ["OPTIONS", "GET", "POST"],
+      "dest": "/api/api/ratings.js"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/Escape-road/dist/index.html"
+    }
+  ],
+  "env": {
+    "KV_URL": "@kv_url",
+    "KV_REST_API_TOKEN": "@kv_rest_api_token"
+  }
+}
